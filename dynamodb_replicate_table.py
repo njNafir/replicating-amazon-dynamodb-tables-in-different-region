@@ -5,7 +5,14 @@ import boto3
 import argparse
 
 
-def replicate(table_name, existing_region, new_region, new_table_name):
+r_access_key = ""
+r_secret_key = ""
+
+
+def replicate(
+        table_name, existing_region, 
+        new_region, new_table_name,
+        access_key, secret_key):
     """
     Replicate table in new region.
 
@@ -26,11 +33,31 @@ def replicate(table_name, existing_region, new_region, new_table_name):
         existing table name is used.
     """
 
-    existing_table = boto3.resource(
+    real_session = boto3.Session(
+        aws_access_key_id=r_access_key,
+        aws_secret_access_key=r_secret_key
+    )
+
+    print(access_key is not None, secret_key is not None)
+
+    if (access_key is not None) and (secret_key is not None):
+        # Create a session with your credentials
+        fake_session = boto3.Session(
+            aws_access_key_id=access_key,
+            aws_secret_access_key=secret_key
+        )
+        print('fake_session', fake_session)
+    else:
+        fake_session = real_session
+
+    print(real_session)
+    print(fake_session)
+
+    existing_table = real_session.resource(
         'dynamodb', region_name=existing_region).Table(table_name)
     items = existing_table.scan()['Items']
 
-    dynamodb = boto3.resource('dynamodb', region_name=new_region)
+    dynamodb = fake_session.resource('dynamodb', region_name=new_region)
 
     print("Creating table '{0}' in region '{1}'".format(
         new_table_name, new_region))
@@ -84,9 +111,27 @@ if __name__ == "__main__":
         '--new_table_name',
         type=str,
         help="Name for the new table [Optional], Old table name will be used")
+    
+    parser.add_argument(
+        '-akey',
+        '--access_key',
+        type=str,
+        help="Access key of remote AWS Account")
+    
+    parser.add_argument(
+        '-skey',
+        '--secret_key',
+        type=str,
+        help="Secret key of remote AWS Account")
+    
     args = parser.parse_args()
     if args.new_table_name is None:
         args.new_table_name = args.table_name
 
+    print(args.table_name, args.region, args.new_region,
+              args.new_table_name,
+              args.access_key, args.secret_key)
+
     replicate(args.table_name, args.region, args.new_region,
-              args.new_table_name)
+              args.new_table_name,
+              args.access_key, args.secret_key)
